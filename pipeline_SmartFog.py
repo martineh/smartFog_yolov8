@@ -29,7 +29,7 @@ if __name__ == "__main__":
         ret, frame = vid.read() 
 
         t0 = time.time()
-        new_frame, detection = sMOD.inf_bodies_showing(frame, with_faces=True)
+        new_frame, alarm = sMOD.inf_bodies_showing(frame, with_faces=True)
         if detection > 0: ident = faceIdentity.identify(frame)
 
         #faces = sMOD.inf_for_cropping(frame, with_faces=True)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
             # Inference Section
             #-----------------------------------------------------------
             t0 = time.time()
-            frame = sMOD.inf_bodies_showing(frame, with_faces=opt.faces)
+            frame,alarm = sMOD.inf_bodies_showing(frame, with_faces=opt.faces)
             t_inf = time.time() - t0
 
             print(f"[*] Process Image {idf+1}/{len(files)} '{f}' in {t_inf:.4f}(s)")
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             ret, frame = cap.read()
             if not ret : break
             
-            frame = sMOD.inf_bodies_showing(frame, with_faces=opt.faces)
+            frame,alarm = sMOD.inf_bodies_showing(frame, with_faces=opt.faces)
             out.write(frame)
             n_frames += 1
 

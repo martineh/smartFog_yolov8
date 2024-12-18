@@ -1,0 +1,6 @@
+#!/bin/bash
+
+source configuration
+
+python3 client.py ${SERVER_IP} ${PORT} ${QUEUE} ${CAPTURE_WIDTH} ${CAPTURE_HEIGHT}
+

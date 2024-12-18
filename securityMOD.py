@@ -10,6 +10,8 @@ from os.path import isfile, join
 from ultralytics import YOLO
 import face_recognition
 
+from colors import ANSIColors
+
 #Tensor Options
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
@@ -50,10 +52,11 @@ rcolors   = [ (0,   100, 230),
               (200, 50,  100),
               (200, 100, 100),
               (100, 0,   0) ]
+
 num_colors = len(rcolors)
 
 
-print("\nLoading models...", end= " ")
+print(f"SERVER MODELS LOAD : {ANSIColors.BG_YELLOW}WAITING{ANSIColors.RESET}", end="\r")
 
 t0 = time.time()
 
@@ -69,7 +72,7 @@ Face  ("models/.force_off_loading.jpg", conf=0.2, verbose=False)
 
 t_load = time.time() - t0
 
-print(f"Done in {t_load:.2f}(s)!\n", end= "\n")
+print(f"SERVER MODELS LOAD : {ANSIColors.GREEN}OK{ANSIColors.RESET} (in {t_load:.2f}s)", end="\n")
 
 def face_crop(faces, name, img):
     faces_cropped = []
@@ -110,6 +113,7 @@ def calculate_distance(target0, target1):
 
 def pairing_object_to_bodies(objects, bodies):
     pairs = []
+    alarm=False
     for o, obj in enumerate(objects):
         min_distance, body_pair = sys.maxsize, -1
         for b, body in enumerate(bodies):
@@ -118,12 +122,13 @@ def pairing_object_to_bodies(objects, bodies):
                 body_pair, min_distance = b, distance
         if body_pair != -1:
             pairs.append([o, body_pair])
+            if weaponsNames[int(obj.cls[0])] in ("Pistol", "Knife", "Weapon"): alarm=True
 
-    return pairs
+    return pairs, alarm
 
 def draw_object_box(img, box, tag, pair_color):
     x1, y1, x2, y2 = box.xyxy[0]
-    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2) # convert to int values
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2) # convert to int values (GPU Tensor to CPU)
 
     cv2.rectangle(img, (x1, y1), (x2, y2), pair_color, 2)
     conf  = math.ceil((box.conf[0]*100))/100
@@ -139,6 +144,19 @@ def draw_object_box(img, box, tag, pair_color):
 
     return img
 
+def draw_line_weapon_body(img, obj, body, lcolor):
+    line_thickness = 2
+    
+    x0, y0, x1, y1 = obj.xyxy[0]
+    x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1) #  convert to int values (GPU Tensor to CPU)
+    p0 = (x0 + int((x1 - x0)/2), y0 + int((y1 - y0)/2))
+
+    x0, y0, x1, y1 = body.xyxy[0]
+    x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1) #  convert to int values (GPU Tensor to CPU)
+    p1 = (x0 + int((x1 - x0)/2), y0 + int((y1 - y0)/2))
+
+    cv2.line(img, p0, p1, lcolor, line_thickness)
+
 def draw_pair_results(img, pairs, objects, bodies):
     bodies_found = {}
     color_id = 0
@@ -147,15 +165,15 @@ def draw_pair_results(img, pairs, objects, bodies):
         obj  = objects[obj_id]
         if body_id not in bodies_found:
             pair_color = rcolors[color_id]
-            draw_object_box(img, body, "Person", pair_color)
-            
+            draw_object_box(img, body, "Person", pair_color)  #draw body box
             bodies_found[body_id] = pair_color
             color_id += 1
             if color_id == num_colors: color_id = 0
         else:
             pair_color = bodies_found[body_id]
 
-        draw_object_box(img, obj, weaponsNames[int(obj.cls[0])], pair_color)
+        draw_object_box(img, obj, weaponsNames[int(obj.cls[0])], pair_color) #draw object box
+        draw_line_weapon_body(img, obj, body, pair_color) #draw line between body and weapon
 
     for o_id, obj in enumerate(objects):
         found = False
@@ -198,14 +216,14 @@ def inf_bodies_showing(img, with_faces=False):
         faces = Face(img, classes=0, verbose=False)[0].boxes
     
     #Pairing Weapons with Bodies
-    pairs   = pairing_object_to_bodies(objects, bodies) 
+    pairs, alarm = pairing_object_to_bodies(objects, bodies) 
     
     #Draw results 
-    img    = draw_pair_results(img, pairs, objects, bodies)
+    img = draw_pair_results(img, pairs, objects, bodies)
     
     if with_faces: img = draw_results(img, faces)
 
-    return img, len(pairs)
+    return img, alarm
 
 def inf_for_cropping(img, with_faces=False):
     #YOLOv8 Inference
@@ -214,7 +232,7 @@ def inf_for_cropping(img, with_faces=False):
     faces   = Face(img, classes=0, verbose=False)[0].boxes
     
     #Pairing Weapons with Bodies
-    pairs   = pairing_object_to_bodies(objects, bodies) 
+    pairs,alarm = pairing_object_to_bodies(objects, bodies) 
     
     bodies_cropped = bodies_crop(pairs, objects, bodies, img)
 

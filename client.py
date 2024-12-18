@@ -6,34 +6,27 @@ import pickle
 import struct
 import connect
 import time
+from   colors import ANSIColors
 
 import threading
 import queue
 
-QMAXSIZE = 10
-
+QMAXSIZE = int(sys.argv[3])
 Q = queue.Queue(maxsize=QMAXSIZE) 
 
-def camera(Q):
-    cap=cv2.VideoCapture(0)
-
-    if cap:
-        print("Client Camera Configuration: OK")
-    else:
-        print("Client Camera Configuration: ERROR")
-        sys.exit(-1)
-
+def clientCamera(Q, cap):
     while True:
         if Q.qsize() < QMAXSIZE:
             ret,frame=cap.read()
             Q.put(frame)
 
-def sender(Q):
-    ip, port = connect.get_ip_port()
+def senderCamera(Q):
+    ip   = sys.argv[1]
+    port = int(sys.argv[2])
     clientsocket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     clientsocket.connect((ip, port))
 
-    print(f"Client Connection [{ip}:{port}]: OK")
+    print(f"CLIENT CONNECTION with [{ANSIColors.RED}{ip}:{port}{ANSIColors.RESET}]: {ANSIColors.GREEN}OK{ANSIColors.RESET}")
 
     while True:
         frame = Q.get()
@@ -47,15 +40,21 @@ def sender(Q):
 
 #By default this app capture from: PORT#0 - Webcam
 if __name__ == "__main__":
-    producer = threading.Thread(target=camera, args=(Q,))
-    consumer = threading.Thread(target=sender, args=(Q,))
+    cap=cv2.VideoCapture(0)
+    
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  int(sys.argv[4]))
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(sys.argv[5]))
 
-    producer.start()
-    consumer.start()
+    client = threading.Thread(target=clientCamera, args=(Q,cap))
+    sender = threading.Thread(target=senderCamera, args=(Q,))
+
+    client.start()
+    sender.start()
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("Client stopped.")
-
+        cap.release()
+        
